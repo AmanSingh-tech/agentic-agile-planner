@@ -39,7 +39,7 @@
 			<artifactId>a2a-java-sdk-server</artifactId>
 			<version>${a2a-sdk.version}</version>
 		</dependency>-->
-		<!-- A2A server core classes — framework agnostic -->
+		<!-- A2A server core classes — framework-agnostic -->
 		<dependency>
 			<groupId>io.github.a2asdk</groupId>
 			<artifactId>a2a-java-sdk-server-common</artifactId>
