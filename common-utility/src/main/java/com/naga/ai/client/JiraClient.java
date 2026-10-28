@@ -13,6 +13,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Shared Jira REST API client used by AI agents.
@@ -24,6 +25,7 @@ public class JiraClient {
 
     private final WebClient webClient;
     private final JiraProperties jiraProperties;
+    private final AtomicInteger mockTicketSequence = new AtomicInteger(100);
 
     public JiraClient(@Qualifier("JIRA_WEBCLIENT") WebClient webClient, JiraProperties jiraProperties) {
         this.webClient = webClient;
@@ -32,6 +34,11 @@ public class JiraClient {
 
     @PostConstruct
     public void testConnection() {
+        if (jiraProperties.isMockMode()) {
+            logger.warn("Jira MOCK mode enabled — tickets will not be created in Jira Cloud. " +
+                    "Set JIRA_EMAIL and JIRA_API_TOKEN to use a real Jira instance");
+            return;
+        }
         logger.info("Verifying Jira connection to: {}", jiraProperties.getBaseUrl());
         try {
             webClient.get()
@@ -55,10 +62,24 @@ public class JiraClient {
     public JiraTicket createTicket(String summary,
                                    String description,
                                    String issueType) {
+        return createTicket(summary, description, issueType, null);
+    }
+
+    /**
+     * Creates a ticket in the given project. Falls back to the configured project when projectKey is blank.
+     */
+    public JiraTicket createTicket(String summary,
+                                   String description,
+                                   String issueType,
+                                   String projectKey) {
         logger.info("Creating Jira ticket — summary: {}", summary);
 
+        if (jiraProperties.isMockMode()) {
+            return mockTicket(summary, description, issueType, projectKey);
+        }
+
         try {
-            Map<String, Object> body = buildTicketBody(summary, description, issueType);
+            Map<String, Object> body = buildTicketBody(summary, description, issueType, projectKey);
             Map response = webClient.post().uri("/rest/api/3/issue")
                     .bodyValue(body)
                     .retrieve()
@@ -76,7 +97,12 @@ public class JiraClient {
 
     }
 
-    private Map<String, Object> buildTicketBody(String summary, String description, String issueType) {
+    private Map<String, Object> buildTicketBody(String summary, String description, String issueType, String projectKey) {
+        // Map.of() rejects nulls and the LLM can pass null arguments — apply safe fallbacks
+        summary = summary != null && !summary.isBlank() ? summary : "No summary provided";
+        description = description != null && !description.isBlank() ? description : summary;
+        issueType = issueType != null && !issueType.isBlank() ? issueType : "Epic";
+
         Map<String, Object> descContent = Map.of(
                 "type", "doc",
                 "version", 1,
@@ -94,12 +120,26 @@ public class JiraClient {
         );
 
         Map<String, Object> fields = new HashMap<>();
-        fields.put("project", Map.of("key", jiraProperties.getProjectSpaceKey()));
+        fields.put("project", Map.of("key", resolveProjectKey(projectKey)));
         fields.put("summary", summary);
         fields.put("description", descContent);
         fields.put("issuetype", Map.of("name", issueType));
 
         return Map.of("fields", fields);
+    }
+
+    private String resolveProjectKey(String projectKey) {
+        if (projectKey != null && !projectKey.isBlank()) {
+            return projectKey.trim();
+        }
+        String configured = jiraProperties.getProjectSpaceKey();
+        return configured != null && !configured.isBlank() ? configured : "DEMO";
+    }
+
+    private JiraTicket mockTicket(String summary, String description, String issueType, String projectKey) {
+        String ticket = resolveProjectKey(projectKey) + "-" + mockTicketSequence.incrementAndGet();
+        logger.info("MOCK ticket created — key: {} type: {} summary: {}", ticket, issueType, summary);
+        return new JiraTicket(ticket, summary, description, issueType);
     }
 
     /**
@@ -172,9 +212,23 @@ public class JiraClient {
             String description,
             String issueType,
             String epicKey) {
+        return createTicketWithEpicLink(summary, description, issueType, epicKey, null);
+    }
+
+    public JiraTicket createTicketWithEpicLink(
+            String summary,
+            String description,
+            String issueType,
+            String epicKey,
+            String projectKey) {
         logger.info("Creating Jira ticket —  summary: {} epicKey: {}",summary, epicKey);
+
+        if (jiraProperties.isMockMode()) {
+            return mockTicket(summary, description, issueType, projectKey);
+        }
+
         try {
-            Map<String, Object> body = buildTicketBodyWithEpic(summary, description,issueType, epicKey);
+            Map<String, Object> body = buildTicketBodyWithEpic(summary, description,issueType, epicKey, projectKey);
             Map response = webClient.post()
                     .uri("/rest/api/3/issue")
                     .bodyValue(body)
@@ -193,7 +247,7 @@ public class JiraClient {
         }
     }
 
-    private Map<String, Object> buildTicketBodyWithEpic( String summary, String description, String issueType, String epicKey) {
+    private Map<String, Object> buildTicketBodyWithEpic( String summary, String description, String issueType, String epicKey, String projectKey) {
         Map<String, Object> descContent = Map.of(
                 "type", "doc",
                 "version", 1,
@@ -213,7 +267,7 @@ public class JiraClient {
         );
 
         Map<String, Object> fields = new HashMap<>();
-        fields.put("project",Map.of("key", jiraProperties.getProjectSpaceKey()));
+        fields.put("project",Map.of("key", resolveProjectKey(projectKey)));
         fields.put("summary", summary);
         fields.put("description", descContent);
         fields.put("issuetype", Map.of("name", issueType));

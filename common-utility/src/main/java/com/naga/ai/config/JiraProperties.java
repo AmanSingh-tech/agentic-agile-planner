@@ -14,6 +14,7 @@ public class JiraProperties {
     private String apiToken;
     private String projectSpaceKey;
     private String storyPointsField;
+    private boolean mock;
 
     public String getBaseUrl() {
         return baseUrl;
@@ -55,8 +56,31 @@ public class JiraProperties {
         this.storyPointsField = storyPointsField;
     }
 
+    public boolean isMock() {
+        return mock;
+    }
+
+    public void setMock(boolean mock) {
+        this.mock = mock;
+    }
+
+    /**
+     * Mock mode is used when explicitly enabled or when Jira credentials are not configured,
+     * so the agents can run end to end locally without a Jira Cloud account.
+     */
+    public boolean isMockMode() {
+        return mock || isBlank(email) || isBlank(apiToken);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     @PostConstruct
     public void validate() {
+        if (isMockMode()) {
+            return;
+        }
         Objects.requireNonNull(baseUrl,
                 "jira.baseUrl is required");
         Objects.requireNonNull(email,
@@ -75,9 +99,10 @@ public class JiraProperties {
         return "JiraProperties { " +
                 "baseUrl='" + baseUrl + '\'' +
                 ", email='" + email + '\'' +
-                ", apiToken='" + apiToken + '\'' +
+                ", apiToken='" + (isBlank(apiToken) ? "" : "****") + '\'' +
                 ", projectSpaceKey='" + projectSpaceKey + '\'' +
                 ", storyPointsField='" + storyPointsField + '\'' +
+                ", mock=" + isMockMode() +
                 '}';
     }
 }

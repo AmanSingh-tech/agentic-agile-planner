@@ -17,3 +17,5 @@ buildNumber.properties
 .classpath
 *.iml
 *.idea/
+logs/
+.vercel
