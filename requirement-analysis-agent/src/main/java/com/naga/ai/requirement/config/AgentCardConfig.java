@@ -17,12 +17,11 @@ public class AgentCardConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentCardConfig.class);
 
-    @Value("${server.port:8081}")
-    private int port;
+    @Value("${agent.public-url:http://localhost:8081}")
+    private String agentUrl;
 
     @Bean
     public AgentCard agentCard() {
-        String agentUrl = "http://localhost:" + port;
         logger.info("Building AgentCard url: {}", agentUrl);
 
         return AgentCard.builder()

@@ -90,8 +90,9 @@ public class RequirementTools {
             """)
     public String createEpicInJira(
             @ToolParam(description = "Short descriptive name for the Epic") String epicName,
-            @ToolParam(description = "Full requirement description") String requirementDescription) {
-        logger.info("Tool createEpicInJira called: {}", epicName);
+            @ToolParam(description = "Full requirement description") String requirementDescription,
+            @ToolParam(description = "Jira project key provided in the approval message") String projectKey) {
+        logger.info("Tool createEpicInJira called: {} projectKey: {}", epicName, projectKey);
 
         if (epicName == null || epicName.isBlank()) {
             logger.warn("createEpicInJira called with null epicName — skipping duplicate call");
@@ -102,13 +103,14 @@ public class RequirementTools {
             JiraTicket epic = jiraClient.createTicket(
                     epicName,
                     requirementDescription,
-                    "Epic"
+                    "Epic",
+                    projectKey
             );
 
             logger.info("Epic created: {}", epic.getTicketKey());
             return "Epic created successfully. " +
                     "Epic key: " + epic.getTicketKey() +
-                    ". Now call storeAcceptanceCriteria with " +
+                    ". Now call createStoriesInJira with " +
                     "this Epic key: " + epic.getTicketKey();
 
         } catch (Exception e) {
@@ -119,13 +121,14 @@ public class RequirementTools {
 
     @Tool(name = "storeAcceptanceCriteria", description = """
             WHEN TO USE:
-                            Call this tool SECOND on user approval only.
+                            Call this tool LAST on user approval, after createStoriesInJira.
                             Never call before createEpicInJira succeeds.
                             Never call if createEpicInJira failed or returned EPIC_CREATION_FAILED.
             
                             EXECUTION ORDER:
                             Step 1 — createEpicInJira must be called first
-                            Step 2 — this tool called second
+                            Step 2 — createStoriesInJira
+                            Step 3 — this tool called last
                             Never call both tools at the same time.
                             Always wait for createEpicInJira result before calling this tool.
             
@@ -199,7 +202,8 @@ public class RequirementTools {
     public String createStoriesInJira(
             @ToolParam(description = "Epic key from createEpicInJira") String epicKey,
             @ToolParam(description ="List of story summaries to create") List<String> stories,
-            @ToolParam(description ="Full stories text for descriptions") String storiesDescription) {
+            @ToolParam(description ="Full stories text for descriptions") String storiesDescription,
+            @ToolParam(description = "Jira project key provided in the approval message") String projectKey) {
         logger.info("Tool createStoriesInJira — epicKey: {} count: {}",epicKey, stories != null ? stories.size() : 0);
 
         if (epicKey == null || epicKey.isBlank()) {
@@ -219,7 +223,8 @@ public class RequirementTools {
                                 story,
                                 storiesDescription,
                                 "Story",
-                                epicKey);
+                                epicKey,
+                                projectKey);
                 logger.info("Story created: {}",
                         ticket.getTicketKey());
                 result.append("- ")

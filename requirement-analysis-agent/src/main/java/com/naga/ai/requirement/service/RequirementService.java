@@ -74,15 +74,20 @@ public class RequirementService {
                                             Project key: %s
                 
                                             Proceed in this EXACT order:
-                                            1. Call createEpicInJira with Epic name, requirement description from memory
+                                            1. Call createEpicInJira with Epic name, requirement description from memory and projectKey: %s
                                             2. Use the REAL Epic key returned by that tool do not invent an Epic key
-                                            3. Call storeAcceptanceCriteria with:
+                                            3. Call createStoriesInJira with:
+                                               - epicKey: the REAL key from step 2
+                                               - stories: one short summary per approved user story
+                                               - storiesDescription: full stories text from memory
+                                               - projectKey: %s
+                                            4. Call storeAcceptanceCriteria with:
                                                - approvedStories: full stories from memory
                                                - sessionId: %s
                                                - epicKey: the REAL key from step 2
                                                - projectKey: %s
-                                            4. Confirm Epic key to user
-                """, sessionId, projectKey, sessionId, projectKey);
+                                            5. Confirm the Epic key and the created Story keys to user
+                """, sessionId, projectKey, projectKey, projectKey, sessionId, projectKey);
         String response = callLlm(approvalMessage, sessionId);
         clearSession(sessionId);
 

@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import static com.naga.ai.orchestrator.constants.Constants.ANALYZE_REQUIREMENT_SKILL;
@@ -22,6 +23,8 @@ public class OrchestratorService {
     private final A2AAgentClient agentClient;
     private final ChatClient chatClient;
 
+    @Value("${spring.ai.ollama.chat.options.model:unknown}")
+    private String model;
 
     public OrchestratorService(AgentRegistry agentRegistry, AgentSessionStore sessionStore, A2AAgentClient agentClient, ChatClient chatClient) {
         this.agentRegistry = agentRegistry;
@@ -43,6 +46,10 @@ public class OrchestratorService {
             Call this first with the user requirement.
             """)
     public String startRequirement(String requirement) {
+        return ExecutionTrace.record("startRequirement", requirement, () -> doStartRequirement(requirement));
+    }
+
+    private String doStartRequirement(String requirement) {
         logger.info("Tool - startRequirement : ");
 
         AgentCard agentCard = agentRegistry.findAgentBySkill(ANALYZE_REQUIREMENT_SKILL);
@@ -72,6 +79,10 @@ public class OrchestratorService {
             or need more detail.
             """)
     public String refineRequirement(String contextId, String feedback) {
+        return ExecutionTrace.record("refineRequirement", feedback, () -> doRefineRequirement(contextId, feedback));
+    }
+
+    private String doRefineRequirement(String contextId, String feedback) {
         logger.info("refineRequirement contextId - {}, feedback - {}", contextId, feedback);
 
         AgentCard agentCard = findAgentForSession(contextId);
@@ -97,6 +108,11 @@ public class OrchestratorService {
             and ready for sprint planning.
             """)
     public String approveRequirement(String contextId,  String projectKey) {
+        return ExecutionTrace.record("approveRequirement", "projectKey: " + projectKey,
+                () -> doApproveRequirement(contextId, projectKey));
+    }
+
+    private String doApproveRequirement(String contextId,  String projectKey) {
         logger.info("Approving requirement — contextId: {} projectKey: {}",contextId, projectKey);
 
         AgentCard agentCard = findAgentForSession(contextId);
@@ -127,9 +143,20 @@ public class OrchestratorService {
      *   3. Approves when satisfied
      * Returns final result to user.
      */
-    public String plan(String requirement, String projectKey) {
+    public PlanResult plan(String requirement, String projectKey) {
         logger.info("plan — requirement: {}, projectKey: {}",requirement, projectKey);
 
+        long start = System.currentTimeMillis();
+        ExecutionTrace.start();
+        try {
+            String summary = runPlan(requirement, projectKey);
+            return new PlanResult(summary, ExecutionTrace.finish(), System.currentTimeMillis() - start, model);
+        } finally {
+            ExecutionTrace.finish();
+        }
+    }
+
+    private String runPlan(String requirement, String projectKey) {
         return chatClient.prompt()
                 .system("""
                         You are an agile sprint planning orchestrator.

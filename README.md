@@ -107,6 +107,58 @@ The system supports both fully autonomous mode and manual human-in-the-loop mode
 
 ---
 
+## Running Locally
+
+**Prerequisites:** Java 21, Docker, [Ollama](https://ollama.com), Node 18+ (for the frontend).
+
+```bash
+./run-local.sh                       # pgvector + models + build + both agents
+cd frontend && npm install && npm run dev   # UI on http://localhost:5173
+```
+
+Everything is configurable with environment variables:
+
+| Variable | Default | Used by |
+|---|---|---|
+| `OLLAMA_CHAT_MODEL` | `qwen2.5` | both agents — use `qwen2.5:3b` on low-RAM / CPU-only machines |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | both agents |
+| `PORT` | `8081` / `8080` | requirement agent / orchestrator |
+| `AGENT_URLS` | `http://localhost:8081` | orchestrator — comma separated A2A agent URLs |
+| `AGENT_PUBLIC_URL` | `http://localhost:${PORT}` | requirement agent — URL advertised in its AgentCard |
+| `DB_URL`, `DB_USER`, `DB_PASSWORD` | `jdbc:postgresql://localhost:5432/vectordb` | requirement agent (`run-local.sh` uses port 5434) |
+| `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY`, `JIRA_BASE_URL` | — | requirement agent |
+| `JIRA_MOCK` | `false` | requirement agent — mock mode is also used automatically when Jira credentials are missing |
+| `CORS_ALLOWED_ORIGINS` | `*` | orchestrator — e.g. `https://your-app.vercel.app` |
+
+**Jira mock mode:** without Jira credentials the agent runs end to end and returns generated keys such as `DEMO-101`
+instead of calling Jira Cloud, so the workflow can be demoed without an Atlassian account.
+
+---
+
+## Frontend
+
+`frontend/` is a Vite + React + TypeScript single-page app:
+
+- **Autonomous** — calls `/plan` and shows the execution trace: every tool call the orchestrator LLM made, its
+  input/output and duration, plus total time vs. time spent inside A2A agent calls.
+- **Step-by-step** — human-in-the-loop flow (start → refine → approve) with per-turn latency.
+- **Agents** — the AgentCards and skills discovered over A2A.
+- **Runs** — history of autonomous runs in this browser (success rate, average time, refinements).
+
+### Deploying to Vercel
+
+The frontend is static; the agents stay where Ollama runs.
+
+1. Import the repo in Vercel and set **Root Directory** to `frontend` (framework: Vite), or run `npx vercel` inside `frontend/`.
+2. Optionally set `VITE_API_BASE_URL` to the orchestrator URL. It can also be changed at runtime under **Settings**.
+3. Start the orchestrator with `CORS_ALLOWED_ORIGINS=https://<your-app>.vercel.app`.
+
+Browsers allow an HTTPS page to call `http://localhost`, so the deployed UI can drive a backend on your own machine
+(the orchestrator answers Chrome's Private Network Access preflight). To share it with others, expose the
+orchestrator over HTTPS (e.g. `cloudflared tunnel --url http://localhost:8080`) and use that URL.
+
+---
+
 ## Key Design Decisions
 
 **Why A2A Protocol?**  
@@ -140,7 +192,7 @@ Adding a new agent requires only registering its URL in `orchestrator-agent/appl
 
 | Endpoint                                               | Method | Description                                                      |
 |--------------------------------------------------------|--------|------------------------------------------------------------------|
-| `/orchestrator-agent/orchestrator/plan`                | POST   | Fully autonomous sprint planning — single request, full workflow |
+| `/orchestrator-agent/orchestrator/plan`                | POST   | Fully autonomous sprint planning — returns `{summary, steps[], totalMs, model}` |
 | `/orchestrator-agent/orchestrator/requirement/start`   | POST   | Start requirement analysis manually                              |
 | `/orchestrator-agent/orchestrator/requirement/refine`  | POST   | Send refinement feedback manually                                |
 | `/orchestrator-agent/orchestrator/requirement/approve` | POST   | Approve stories and create Jira tickets manually                 |

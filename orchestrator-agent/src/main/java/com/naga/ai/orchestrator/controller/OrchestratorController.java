@@ -3,6 +3,7 @@ package com.naga.ai.orchestrator.controller;
 import com.naga.ai.orchestrator.registry.AgentRegistry;
 import com.naga.ai.orchestrator.service.OrchestratorResponse;
 import com.naga.ai.orchestrator.service.OrchestratorService;
+import com.naga.ai.orchestrator.service.PlanResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -50,9 +51,9 @@ public class OrchestratorController {
     }
 
     @PostMapping("/plan")
-    public ResponseEntity<String> plan(@RequestBody PlanRequest request) {
+    public ResponseEntity<PlanResult> plan(@RequestBody PlanRequest request) {
         logger.info("POST /plan");
-        String result = orchestratorService.plan(request.requirement(), request.projectKey());
+        PlanResult result = orchestratorService.plan(request.requirement(), request.projectKey());
         return ResponseEntity.ok(result);
     }
 
